@@ -108,3 +108,59 @@ export function isNewList(shown: readonly Step[], next: readonly Step[]): boolea
 }
 
 export const allDone = (steps: readonly Step[]): Step[] => steps.map(step => ({ ...step, status: 'done' }))
+
+// Elapsed time as a person reads it: 45s, 1m 12s, 1h 3m.
+export function since(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+// Text cut to `room` cells with an ellipsis.
+export function fit(text: string, room: number): string {
+  if (room <= 0) return ''
+  const points = [...text]
+
+  return points.length <= room ? text : `${points.slice(0, Math.max(0, room - 1)).join('')}…`
+}
+
+// The terminal's track: one run of cells per step, a space between, filling
+// `width` cells exactly. Each part is [cells, kind].
+export function trackParts(steps: readonly Step[], width: number): [string, StepStatus][] {
+  const count = steps.length
+  if (count === 0 || width <= 0) return []
+  const gaps = width >= count * 3 ? count - 1 : 0
+  const room = width - gaps
+  const parts: [string, StepStatus][] = []
+  let used = 0
+  steps.forEach((step, index) => {
+    const end = Math.round(((index + 1) * room) / count)
+    const cells = Math.max(1, end - used)
+    used = end
+    parts.push([(step.status === 'pending' ? '─' : '━').repeat(cells), step.status])
+    if (gaps > 0 && index < count - 1) parts.push([' ', 'pending'])
+  })
+
+  return parts
+}
+
+// The desktop's track: the same segments, drawn as one SVG that stretches to its slot.
+export function trackSvg(steps: readonly Step[], colors: Record<StepStatus, string>): string {
+  const width = 1000
+  const gap = steps.length > 1 ? 6 : 0
+  const each = (width - gap * (steps.length - 1)) / Math.max(1, steps.length)
+  const rects = steps
+    .map((step, index) => {
+      const x = (each + gap) * index
+      const y = step.status === 'pending' ? 3 : 2
+      const tall = step.status === 'pending' ? 4 : 6
+
+      return `<rect x="${x.toFixed(1)}" y="${y}" width="${each.toFixed(1)}" height="${tall}" fill="${colors[step.status]}"/>`
+    })
+    .join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="10" viewBox="0 0 ${width} 10" preserveAspectRatio="none">${rects}</svg>`
+}

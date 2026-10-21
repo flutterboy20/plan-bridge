@@ -1,39 +1,41 @@
 # plan-bridge
 
-A Claude Code mod that fills the [plan-progress](https://github.com/zycck/claude-mods) bar above the prompt from the task list Claude already keeps, so you get a live progress bar on every multi-step task without Claude making any extra calls.
+A Claude Code mod that puts a live progress bar above the prompt, filled from the task list Claude already keeps. Every multi-step task gets a bar, in the terminal and in the desktop app, and Claude makes no extra calls for it.
 
-## Why
+```
+▶ Make an HTML page of my setup                 1/3 · 33% · 1m 12s ✕
+━━━━━━━━━━━━━━━━━━━━ ━━━━━━━━━━━━━━━━━━━━ ────────────────────
+Collect descriptions  then Generate the page
+```
 
-plan-progress draws a progress bar when Claude calls its `plan_progress` tool. In practice Claude often keeps its plan somewhere else:
+## How it works
+
+Claude already keeps a plan while it works:
 
 - in the **Claude Code desktop app**, its own task list (the checklist shown in the conversation);
 - in the **terminal**, the `TaskCreate` / `TaskUpdate` task tools, or `TodoWrite`.
 
-When that happens, no bar appears. plan-bridge watches those task lists and sends each change to plan-progress, so the bar always matches what Claude is doing.
+plan-bridge watches those lists and draws them as a bar:
 
-## What it does
+- **First row:** the task, titled from your prompt, then steps done, the percent and the time running, and ✕ to close it.
+- **Second row:** one segment per step. Green is done, gold is the step at work, dim is still to come. The desktop draws it as a graphic; the terminal uses line characters sized to the window.
+- **Third row:** the step at work and the one after it, or "All done · took 2m 14s" once Claude finishes.
+- A new task list gets a new bar. A change to the current list (a step added or renamed) updates the same bar.
+- A finished bar steps aside when you send your next prompt.
+- Task lists kept by subagents are left alone.
+- The clock ticks only while a task is running; nothing runs while idle.
 
-- A new task list becomes a new bar, titled from your prompt.
-- Steps tick over as Claude moves through the list; the bar turns green when Claude finishes.
-- A change to the current list (a step added or renamed) updates the same bar.
-- Every few file edits it re-sends the open bar unchanged, so plan-progress never has to remind Claude to update it.
-- Task lists kept by subagents are left alone; plan-progress already shows agents as rows under the bar.
-- If plan-progress isn't installed or is turned off, plan-bridge does nothing and breaks nothing.
+## Works with plan-progress (optional)
+
+If you also use [plan-progress](https://github.com/zycck/claude-mods), plan-bridge hands each list to plan-progress and draws nothing itself, so there is only ever one bar, in plan-progress's style. If plan-progress is turned off, plan-bridge draws its own bar again. You don't need plan-progress for anything.
 
 ## Requirements
 
-- Claude Code 2.1.304 or newer, with mods (function hooks)
-- [plan-progress](https://github.com/zycck/claude-mods) installed
+Claude Code 2.1.304 or newer, with mods (function hooks).
 
 ## Install
 
-First install plan-progress, if you haven't already. At the prompt of a terminal session:
-
-```
-/plugin install plan-progress --marketplace zycck/claude-mods
-```
-
-Then plan-bridge. At the prompt of a terminal session:
+At the prompt of a terminal session:
 
 ```
 /plugin install plan-bridge --marketplace flutterboy20/plan-bridge

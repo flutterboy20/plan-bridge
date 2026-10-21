@@ -1,12 +1,12 @@
 {
   "name": "plan-bridge",
   "owner": { "name": "flutterboy20" },
-  "metadata": { "description": "plan-bridge: fills the plan-progress bar from the task list Claude already keeps" },
+  "metadata": { "description": "plan-bridge: a live progress bar from the task list Claude already keeps" },
   "plugins": [
     {
       "name": "plan-bridge",
       "source": "./",
-      "description": "Fills the plan-progress bar above the prompt from the task list Claude already keeps (the desktop app's task list, or the terminal's task tools), with no extra model calls."
+      "description": "A live progress bar above the prompt, filled from the task list Claude already keeps (the desktop app's task list, or the terminal's task tools), with no extra model calls."
     }
   ]
 }
