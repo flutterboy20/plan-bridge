@@ -20,10 +20,35 @@ plan-bridge watches those lists and draws them as a bar:
 - **First row:** the task, titled from your prompt, then steps done, the percent and the time running, and ✕ to close it.
 - **Second row:** one segment per step. Green is done, gold is the step at work, dim is still to come. The desktop draws it as a graphic; the terminal uses line characters sized to the window.
 - **Third row:** the step at work and the one after it, or "All done · took 2m 14s" once Claude finishes.
+- **Agent rows:** each subagent Claude starts gets a row under the bar, with its model, the tool it is on and its time, until it finishes.
 - A new task list gets a new bar. A change to the current list (a step added or renamed) updates the same bar.
-- A finished bar steps aside when you send your next prompt.
+- A finished bar stays until you close it with ✕; the next task's bar stacks under it (three bars at most).
 - Task lists kept by subagents are left alone.
 - The clock ticks only while a task is running; nothing runs while idle.
+
+## The next-step question moves into the band (desktop app)
+
+When Claude ends a turn on a question in the desktop app (the box with a question and reply buttons), the app hides everything above the prompt while that box is up, plan-bridge's bar included. So plan-bridge moves the question into the band instead:
+
+```
+✓ Fix the checkout flow        ━━━━━━━━━━━━━━━━━━━━  100%  ✕
+? Run the tests now?  [Yes, run them]  [Not now]
+```
+
+- The question and its buttons are taken off Claude's call as it streams in, so the app draws no box and the bar stays in view.
+- A reply button puts its text in the prompt box. It does not send it: edit it if you like, then press Enter.
+- The question row goes when you send your next prompt, or on `/clear`. The bar stays until ✕.
+- The app's own box still shows when a button is an app action (commit, create a PR, merge), since only the app can run those.
+- Turns run by subagents, the terminal and VS Code are not touched.
+
+What changes for you with this on:
+
+- The app no longer marks the session as "waiting on you" for these questions.
+- Replies take one more Enter, since a button fills the prompt rather than sending.
+- If you collapse the band (`[-]`), the question is collapsed with it; no box comes back in its place.
+- Claude is told nothing is pending, so it won't repeat the question in its message; the question is in the band.
+
+Turn plan-bridge off, or uninstall it, and the app's box comes back as before. plan-bridge changes no settings or files.
 
 ## Works with plan-progress (optional)
 

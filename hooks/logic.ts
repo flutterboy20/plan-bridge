@@ -1,7 +1,7 @@
 // How each task-list tool's input changes the list the bar shows. Plain
 // functions of the list and the input, so the hook only moves data around.
 
-import type { Step, StepStatus } from '../types'
+import type { Question, Step, StepStatus } from '../types'
 
 const TITLE_MAX = 60
 const BAR_TITLE_MAX = 48
@@ -18,11 +18,23 @@ export function cleanTitle(text: unknown, max = TITLE_MAX): string {
   return `${space > max / 2 ? cut.slice(0, space) : cut}…`
 }
 
-// The bar's title from the person's prompt: its first sentence, short.
-export function barTitle(prompt: string): string {
-  const first = prompt.replace(/^\/\S+\s*/, '').split(/(?<=[.!?])\s|\n/)[0] ?? ''
+// A sentence that says what was done rather than what to do ("I ran
+// /reload-plugins."), or that is too short to name a task.
+const isAside = (sentence: string) =>
+  /^\s*(i\s+(just\s+)?(ran|did|have|tried|restarted|reloaded)|ok(ay)?|thanks|done)\b/i.test(sentence) ||
+  sentence.trim().split(/\s+/).length < 3
 
-  return cleanTitle(first, BAR_TITLE_MAX) || 'Task'
+// The bar's title from the person's prompt: its first sentence that asks for
+// something, short; the first sentence when none does.
+export function barTitle(prompt: string): string {
+  const sentences = prompt
+    .replace(/^\/\S+\s*/, '')
+    .split(/(?<=[.!?])\s|\n/)
+    .map(sentence => sentence.trim())
+    .filter(sentence => sentence !== '')
+  const pick = sentences.find(sentence => !isAside(sentence)) ?? sentences[0] ?? ''
+
+  return cleanTitle(pick, BAR_TITLE_MAX) || 'Task'
 }
 
 export function statusOf(value: unknown): StepStatus {
@@ -109,6 +121,26 @@ export function isNewList(shown: readonly Step[], next: readonly Step[]): boolea
 
 export const allDone = (steps: readonly Step[]): Step[] => steps.map(step => ({ ...step, status: 'done' }))
 
+// wrap_up's question and its reply buttons, when the band can stand in for the
+// desktop's box: null with no question, or with an app action (commit, create
+// a PR) among the buttons, since only the box can run one.
+export function wrapUpOffer(input: Record<string, unknown>): Question | null {
+  const ask = cleanTitle(input.ask, 140)
+  const actions = Array.isArray(input.actions) ? (input.actions as Record<string, unknown>[]) : []
+  if (ask === '' || actions.length === 0) return null
+  if (actions.some(one => typeof one !== 'object' || one === null || one.action !== undefined)) return null
+  const replies = actions
+    .map(one => {
+      const label = cleanTitle(one.label, 32)
+      const message = typeof one.message === 'string' && one.message.trim() !== '' ? one.message.trim() : label
+
+      return { label, message }
+    })
+    .filter(one => one.label !== '')
+
+  return replies.length === 0 ? null : { ask, replies }
+}
+
 // Elapsed time as a person reads it: 45s, 1m 12s, 1h 3m.
 export function since(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))
@@ -127,40 +159,30 @@ export function fit(text: string, room: number): string {
   return points.length <= room ? text : `${points.slice(0, Math.max(0, room - 1)).join('')}…`
 }
 
-// The terminal's track: one run of cells per step, a space between, filling
-// `width` cells exactly. Each part is [cells, kind].
-export function trackParts(steps: readonly Step[], width: number): [string, StepStatus][] {
-  const count = steps.length
-  if (count === 0 || width <= 0) return []
-  const gaps = width >= count * 3 ? count - 1 : 0
-  const room = width - gaps
-  const parts: [string, StepStatus][] = []
-  let used = 0
-  steps.forEach((step, index) => {
-    const end = Math.round(((index + 1) * room) / count)
-    const cells = Math.max(1, end - used)
-    used = end
-    parts.push([(step.status === 'pending' ? '─' : '━').repeat(cells), step.status])
-    if (gaps > 0 && index < count - 1) parts.push([' ', 'pending'])
-  })
+// A model id as a person reads it: claude-haiku-4-5-20251001 is "haiku 4.5".
+export function modelName(model: string): string {
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(model)
+  if (m === null) return model.replace(/^claude-/, '')
 
-  return parts
+  return `${m[1]} ${m[2]}${m[3] !== undefined ? `.${m[3]}` : ''}`
 }
 
-// The desktop's track: the same segments, drawn as one SVG that stretches to its slot.
-export function trackSvg(steps: readonly Step[], colors: Record<StepStatus, string>): string {
-  const width = 1000
-  const gap = steps.length > 1 ? 6 : 0
-  const each = (width - gap * (steps.length - 1)) / Math.max(1, steps.length)
-  const rects = steps
-    .map((step, index) => {
-      const x = (each + gap) * index
-      const y = step.status === 'pending' ? 3 : 2
-      const tall = step.status === 'pending' ? 4 : 6
+// A tool as a word: mcp__server__search is "search".
+export const toolWord = (tool: string) => /^mcp__.+?__(.+)$/.exec(tool)?.[1] ?? tool
 
-      return `<rect x="${x.toFixed(1)}" y="${y}" width="${each.toFixed(1)}" height="${tall}" fill="${colors[step.status]}"/>`
-    })
-    .join('')
+// How far along a list is, 0 to 1: each step done counts whole, the one at work half.
+export function fraction(steps: readonly Step[]): number {
+  if (steps.length === 0) return 0
+  const done = steps.filter(step => step.status === 'done').length
+  const active = steps.some(step => step.status === 'active') ? 0.5 : 0
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="10" viewBox="0 0 ${width} 10" preserveAspectRatio="none">${rects}</svg>`
+  return Math.min(1, (done + active) / steps.length)
+}
+
+// A stable pseudo-random number in [0, 1) for a cell, so the dots stay put between draws.
+export function hash(x: number, y: number, seed: number): number {
+  let n = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0
+  n = Math.imul(n ^ (n >>> 13), 1274126177)
+
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296
 }
