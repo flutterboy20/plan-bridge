@@ -277,13 +277,18 @@ async function settleAgents($: EngineInterface) {
   }
 }
 
-// The wrap_up question last taken off a call as it streamed, for the band to
-// show once that call runs (a turn makes one wrap_up call).
-let streamed: Question | null = null
+// The wrap_up question last taken off a call as it streamed, and the turn it
+// streamed in, for the band to show once that call runs (a turn makes one
+// wrap_up call). Only that turn's end drops it: other model calls (a mod's
+// fork, a keep-warm ping) end turns of their own meanwhile.
+let streamed: { turnId: string; offer: Question } | null = null
+
+// What became of the held question, for /plan-bridge debug.
+let questionTrace = 'no question held since the mod loaded'
 
 // wrap_up's arguments, as streamed pieces, with the question and its buttons
 // left out when the band can carry them; as they came otherwise.
-function withoutQuestion(held: TurnStepChunk[]): TurnStepChunk[] {
+function withoutQuestion(turnId: string, held: TurnStepChunk[]): TurnStepChunk[] {
   const first = held[0]
   if (first === undefined || first.kind !== 'input') return held
   let input: Record<string, unknown>
@@ -294,7 +299,8 @@ function withoutQuestion(held: TurnStepChunk[]): TurnStepChunk[] {
   }
   const offer = wrapUpOffer(input)
   if (offer === null) return held
-  streamed = offer
+  streamed = { turnId, offer }
+  questionTrace = `taken off wrap_up as it streamed in turn ${turnId}: "${offer.ask}"`
   const { ask: _ask, actions: _actions, blocked: _blocked, ...rest } = input
 
   return [{ kind: 'input', index: first.index, json: JSON.stringify(rest) }]
@@ -329,6 +335,7 @@ export const register: Register = on => {
           rows.length === 0 ? 'No bars kept.' : `Bars kept (${rows.length}):`,
           ...rows,
           asked === null ? '' : `Question shown: "${asked.ask}" (${asked.replies.length} replies)`,
+          `Last question: ${questionTrace}`,
           e.args.trim() === '' ? 'Use "/plan-bridge debug" for this report.' : '',
         ]
           .filter(Boolean)
@@ -408,12 +415,12 @@ export const register: Register = on => {
       }
       // the call's arguments are whole once another chunk comes: they go on, rewritten
       if (held.length > 0) {
-        yield* withoutQuestion(held)
+        yield* withoutQuestion(e.turnId, held)
         held = []
       }
       yield chunk
     }
-    if (held.length > 0) yield* withoutQuestion(held)
+    if (held.length > 0) yield* withoutQuestion(e.turnId, held)
 
     return await stream.result
   })
@@ -426,8 +433,13 @@ export const register: Register = on => {
 
       return done
     }
-    // a question taken off a call that never ran (the turn stopped first) is not shown later
-    streamed = null
+    // a question taken off a call that never ran (its turn stopped first) is not shown later
+    if (streamed !== null && streamed.turnId === e.turnId) {
+      questionTrace = `dropped: turn ${e.turnId} ended (${e.reason}) before its wrap_up ran`
+      streamed = null
+    } else if (streamed !== null) {
+      questionTrace += `; kept through the end of another turn (${e.turnId})`
+    }
     if (e.reason === 'aborted') {
       await setState($, 'error', 'Stopped')
 
@@ -479,7 +491,13 @@ export const register: Register = on => {
         const { ask: _ask, actions: _actions, blocked: _blocked, ...rest } = e as unknown as Record<string, unknown>
         sent = rest as unknown as typeof e
       }
-      const offer = here ?? streamed
+      const offer = here ?? streamed?.offer ?? null
+      questionTrace =
+        here !== null
+          ? `taken off wrap_up as it ran (not streamed): "${here.ask}"`
+          : streamed !== null
+            ? `shown: wrap_up ran with the question held from turn ${streamed.turnId}`
+            : 'wrap_up ran with no question held'
       streamed = null
       if (offer !== null) await update($, question, () => offer)
     }

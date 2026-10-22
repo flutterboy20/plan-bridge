@@ -1,6 +1,6 @@
 {
   "name": "plan-bridge",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A live progress bar above the prompt, filled from the task list Claude already keeps (the desktop app's task list, or the terminal's task tools), with no extra model calls. Works on its own; hands the list to plan-progress when that is installed.",
   "author": {
     "name": "Ruhaan"

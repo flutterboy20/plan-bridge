@@ -406,6 +406,26 @@ test('a question taken off a call that never ran is forgotten when the turn stop
   await ui.unmount()
 })
 
+test("another turn ending meanwhile (a mod's fork, a ping) keeps the held question", async ($, on) => {
+  const { responses } = engine(on)
+  await start($)
+  await $.prompt.submit(typed('Fix the bar'))
+  await call($, UPDATE_PLAN, { items: ITEMS })
+  responses.push([
+    { kind: 'tool', index: 0, id: 'tu1', name: WRAP_UP },
+    { kind: 'input', index: 0, json: JSON.stringify({ recap: 'Fixed.', ask: 'Row showing?', actions: [{ label: 'Yes' }] }) },
+  ])
+  for await (const chunk of $.turn.step({ turnId: 'main', index: 0, model: 'claude-opus-5-5', messageCount: 2 } as never)) void chunk
+  await $.turn.complete({ reason: 'answer', turnId: 'fork', text: '', answer: '', category: null, explanation: null } as never)
+
+  await call($, WRAP_UP, { recap: 'Fixed.' })
+  const ui = await band($, 'desktop')
+  expect(await ui.find({ type: 'Text', text: /^Row showing\?$/ })).toBeDefined()
+  await ui.unmount()
+  const report = await $.command.run({ command: 'plan-bridge', args: 'debug' } as never)
+  expect(String((report as { text?: string }).text)).toContain('Last question: shown: wrap_up ran with the question held from turn main')
+})
+
 test('with no task list the question still moves into the band, alone; an app action keeps its box', async ($, on) => {
   const { wrapUps, filled } = engine(on)
   await start($)
