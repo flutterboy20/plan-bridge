@@ -386,6 +386,26 @@ test("wrap_up's question comes off the call as it streams, so the recorded call 
   expect(kept[1]?.json).toBe(keep)
 })
 
+test('a question taken off a call that never ran is forgotten when the turn stops', async ($, on) => {
+  const { responses } = engine(on)
+  await start($)
+  await $.prompt.submit(typed('Fix the bar'))
+  responses.push([
+    { kind: 'tool', index: 0, id: 'tu1', name: WRAP_UP },
+    { kind: 'input', index: 0, json: JSON.stringify({ recap: 'Fixed.', ask: 'Old question?', actions: [{ label: 'Yes' }] }) },
+  ])
+  for await (const chunk of $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 2 } as never)) void chunk
+  // stopped before the wrap_up call ran
+  await $.turn.complete({ reason: 'aborted', turnId: 't1', text: '', answer: '', category: null, explanation: null } as never)
+
+  // the next turn ends with no question of its own
+  await $.prompt.submit(typed('Try again'))
+  await call($, WRAP_UP, { recap: 'Done.' })
+  const ui = await band($, 'desktop')
+  expect(await ui.find({ type: 'Text', text: /^Old question\?$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('with no task list the question still moves into the band, alone; an app action keeps its box', async ($, on) => {
   const { wrapUps, filled } = engine(on)
   await start($)

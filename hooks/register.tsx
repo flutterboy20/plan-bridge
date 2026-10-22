@@ -426,6 +426,8 @@ export const register: Register = on => {
 
       return done
     }
+    // a question taken off a call that never ran (the turn stopped first) is not shown later
+    streamed = null
     if (e.reason === 'aborted') {
       await setState($, 'error', 'Stopped')
 
